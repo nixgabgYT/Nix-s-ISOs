@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nix’s ISOs | Optimized Windows Builds</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #050507;
+            color: #e2e8f0;
+            scroll-behavior: smooth;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .glass-card {
+            background: rgba(20, 20, 25, 0.8);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .win-logo-btn {
+            transition: all 0.1s ease;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        
+        .win-logo-btn:active { transform: scale(0.8); }
+        
+        @keyframes win-shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-3px) rotate(-5deg); }
+            50% { transform: translateX(3px) rotate(5deg); }
+            100% { transform: translateX(0); }
+        }
+        .animate-win-click { animation: win-shake 0.15s ease-in-out; }
+
+        .cart-badge {
+            position: absolute; top: -5px; right: -5px;
+            background: #ef4444; color: white; font-size: 10px;
+            width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; font-weight: bold;
+        }
+
+        #toast {
+            position: fixed; bottom: 30px; right: 30px;
+            transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 110;
+        }
+        #toast.active { transform: translateX(0); }
+
+        /* Stili per la barra di progresso del download */
+        #dl-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            z-index: 1000; display: none; align-items: center; justify-content: center;
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <!-- Toast di Notifica -->
+    <div id="toast" class="glass-card p-5 rounded-2xl border-l-4 border-l-blue-500 flex items-center space-x-4 shadow-2xl">
+        <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+            <i id="toast-icon" class="fas fa-shopping-cart text-blue-500"></i>
+        </div>
+        <div>
+            <p id="toast-title" class="font-bold text-sm">Cart Updated</p>
+            <p id="toast-msg" class="text-xs text-gray-400">Added to your free downloads.</p>
+        </div>
+    </div>
+
+    <!-- Modal per la simulazione del download -->
+    <div id="dl-modal">
+        <div class="glass-card p-10 rounded-[32px] w-full max-w-md text-center">
+            <i class="fas fa-cloud-arrow-down text-5xl text-blue-500 mb-6 animate-bounce"></i>
+            <h3 class="text-2xl font-black mb-2 uppercase italic">Preparing ISO</h3>
+            <p class="text-gray-400 text-sm mb-8">Nix's Optimizer is stripping bloatware...</p>
+            <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-4">
+                <div id="dl-progress" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
+            </div>
+            <p id="dl-percent" class="font-mono text-blue-400 text-xs">0%</p>
+        </div>
+    </div>
+
+    <!-- Sfondo Decorativo -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_50%_20%,rgba(59,130,246,0.1),transparent_50%)] pointer-events-none"></div>
+
+    <!-- Navigazione -->
+    <nav class="relative z-30 max-w-7xl mx-auto px-8 py-10 flex justify-between items-center">
+        <div class="flex items-center space-x-4">
+            <div id="win-trigger" class="win-logo-btn w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg hover:shadow-blue-500/40 transition-shadow">
+                <i class="fab fa-windows text-white text-2xl"></i>
+            </div>
+            <div>
+                <span class="text-2xl font-black tracking-tighter uppercase">Nix’s <span class="text-blue-500">ISOs</span></span>
+                <p class="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase">Pro optimized</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-6">
+            <button onclick="toggleCart()" class="relative p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition border border-white/5 group">
+                <i class="fas fa-cart-shopping text-lg group-hover:text-blue-400 transition-colors"></i>
+                <span id="cart-count" class="cart-badge">0</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Sezione Hero -->
+    <header class="relative z-10 max-w-5xl mx-auto px-8 pt-20 pb-32 text-center">
+        <h1 class="text-7xl md:text-9xl font-black mb-8 tracking-tighter leading-none">
+            BETTER. <br><span class="gradient-text">FASTER.</span> FREE.
+        </h1>
+        <p class="text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Stripped Windows images for elite performance. 
+            <span class="block mt-2 text-sm font-bold text-blue-500/80 uppercase tracking-widest">Click the logo for the system sound</span>
+        </p>
+        <a href="#projects" class="inline-block bg-white text-black px-12 py-5 rounded-2xl font-black hover:bg-blue-500 hover:text-white transition-all duration-300 transform hover:scale-105 uppercase tracking-widest text-sm">
+            View Builds
+        </a>
+    </header>
+
+    <!-- Griglia Progetti -->
+    <section id="projects" class="max-w-7xl mx-auto px-8 py-20 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            
+            <!-- Win 8.1 Mini -->
+            <div class="glass-card rounded-[40px] p-10 flex flex-col">
+                <div class="flex justify-between items-start mb-10">
+                    <div>
+                        <div class="flex items-center space-x-2 mb-4">
+                            <span class="px-3 py-1 bg-blue-500/10 text-blue-400 text-[10px] font-black rounded-lg uppercase border border-blue-500/20">Mini Edition</span>
+                            <span class="px-3 py-1 bg-green-500/10 text-green-400 text-[10px] font-black rounded-lg uppercase border border-green-500/20">v1.2</span>
+                        </div>
+                        <h3 class="text-4xl font-black tracking-tight">Windows 8.1</h3>
+                    </div>
+                    <span class="text-2xl font-black text-white/20">FREE</span>
+                </div>
+                
+                <div class="bg-blue-500/5 p-6 rounded-3xl mb-8 border border-blue-500/10">
+                    <p class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-3">Administrator Setup</p>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user-shield text-blue-400"></i>
+                        </div>
+                        <span class="text-lg font-bold">Profile Name: <span class="text-white font-mono uppercase tracking-widest">Nix</span></span>
+                    </div>
+                </div>
+
+                <div class="space-y-4 mb-10 text-gray-400 text-sm">
+                    <div class="flex items-center">
+                        <i class="fas fa-circle-check text-green-500 mr-3"></i>
+                        <span>Browser removed for peak performance</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-circle-check text-green-500 mr-3"></i>
+                        <span>Aero & Basic themes preserved</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-circle-check text-green-500 mr-3"></i>
+                        <span>Zero Metro Apps / Zero Bloat</span>
+                    </div>
+                </div>
+
+                <button onclick="addToCart('Windows 8.1 Mini')" class="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black transition-all shadow-xl shadow-blue-600/20 group uppercase">
+                    Add to Cart <i class="fas fa-cart-plus ml-2 group-hover:translate-x-1 transition-transform"></i>
+                </button>
+            </div>
+
+            <!-- Win 10 Mini (Prossimamente) -->
+            <div class="glass-card rounded-[40px] p-10 flex flex-col border-dashed border-white/10 opacity-40 grayscale relative group">
+                <div class="absolute inset-0 flex items-center justify-center z-20">
+                    <div class="bg-black/80 px-6 py-3 rounded-xl border border-white/10 backdrop-blur-md">
+                        <span class="text-xs font-black tracking-[0.3em] uppercase text-white">Coming Soon</span>
+                    </div>
+                </div>
+                <h3 class="text-4xl font-black tracking-tight text-gray-600">Windows 10</h3>
+                <p class="text-gray-700 mt-6 font-bold uppercase tracking-widest text-xs">Mini strip edition v2.0</p>
+                <div class="mt-auto h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div class="w-2/3 h-full bg-blue-600/20"></div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Sidebar Carrello -->
+    <div id="cart-sidebar" class="fixed top-0 right-0 h-full w-full md:w-96 bg-[#08080a] z-[60] shadow-2xl transform translate-x-full transition-transform duration-500 border-l border-white/5 flex flex-col">
+        <div class="p-10 flex justify-between items-center border-b border-white/5">
+            <h3 class="text-2xl font-black uppercase tracking-tighter">Your Downloads</h3>
+            <button onclick="toggleCart()" class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full hover:bg-white/10 transition">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <div id="cart-items" class="p-10 flex-1 space-y-4 overflow-y-auto">
+            <p id="empty-msg" class="text-center text-gray-600 py-20 font-bold uppercase tracking-widest text-xs">Cart is empty</p>
+        </div>
+        <div class="p-10 border-t border-white/5">
+            <div class="flex justify-between font-black text-xl mb-8">
+                <span>TOTAL</span>
+                <span class="text-blue-500">$0.00</span>
+            </div>
+            <button onclick="startCheckout()" class="w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-blue-600 hover:text-white transition-all">
+                Checkout Free
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- SISTEMA AUDIO SYNTH ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSynth(type) {
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'startup') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.2, now + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                osc.start(now); osc.stop(now + 0.8);
+            } else if (type === 'error') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(110, now);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'notify') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                osc.start(now); osc.stop(now + 0.5);
+            }
+        }
+
+        // --- GESTIONE INTERAZIONI LOGO ---
+        const winTrigger = document.getElementById('win-trigger');
+        let clickCount = 0;
+        if (winTrigger) {
+            winTrigger.addEventListener('click', () => {
+                clickCount++;
+                winTrigger.classList.add('animate-win-click');
+                setTimeout(() => winTrigger.classList.remove('animate-win-click'), 150);
+                if (clickCount % 4 === 0) playSynth('error');
+                else playSynth('startup');
+            });
+        }
+
+        // --- LOGICA CARRELLO E CHECKOUT ---
+        let cart = [];
+        
+        function toggleCart() {
+            const sidebar = document.getElementById('cart-sidebar');
+            if (sidebar) sidebar.classList.toggle('translate-x-full');
+        }
+
+        function addToCart(name) {
+            if (!cart.includes(name)) {
+                cart.push(name);
+                playSynth('notify');
+                updateCart();
+                showCustomToast("Cart Updated", "Added to your free downloads.", "fa-shopping-cart");
+            }
+        }
+
+        function updateCart() {
+            const cartCount = document.getElementById('cart-count');
+            const emptyMsg = document.getElementById('empty-msg');
+            const cartItems = document.getElementById('cart-items');
+
+            if (cartCount) cartCount.innerText = cart.length;
+            if (emptyMsg) emptyMsg.style.display = cart.length ? 'none' : 'block';
+            if (cartItems) {
+                cartItems.innerHTML = cart.map(item => `
+                    <div class="bg-white/5 p-6 rounded-2xl flex justify-between items-center border border-white/5">
+                        <span class="font-black text-sm uppercase tracking-tighter">${item}</span>
+                        <button onclick="removeFromCart('${item}')" class="text-gray-500 hover:text-red-500 transition"><i class="fas fa-trash-can"></i></button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function removeFromCart(name) {
+            cart = cart.filter(i => i !== name);
+            updateCart();
+        }
+
+        function showCustomToast(title, msg, icon) {
+            const toast = document.getElementById('toast');
+            const tTitle = document.getElementById('toast-title');
+            const tMsg = document.getElementById('toast-msg');
+            const tIcon = document.getElementById('toast-icon');
+
+            if (toast && tTitle && tMsg && tIcon) {
+                tTitle.innerText = title;
+                tMsg.innerText = msg;
+                tIcon.className = `fas ${icon} text-blue-500`;
+                toast.classList.add('active');
+                setTimeout(() => toast.classList.remove('active'), 4000);
+            }
+        }
+
+        // Funzione per avviare il download reale del file
+        function triggerRealDownload() {
+            cart.forEach(itemName => {
+                // Creiamo un contenuto placeholder per il file .iso
+                const dummyContent = "Nix Optimized ISO Download Placeholder for " + itemName + "\nThis is a simulated download.";
+                const blob = new Blob([dummyContent], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                // Formattiamo il nome del file
+                a.download = itemName.replace(/\s+/g, '_') + "_Nix_Optimized.iso";
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            });
+        }
+
+        function startCheckout() {
+            if (cart.length === 0) {
+                playSynth('error');
+                showCustomToast("Cart Empty", "Add a build before checkout.", "fa-triangle-exclamation");
+                return;
+            }
+
+            toggleCart();
+            const dlModal = document.getElementById('dl-modal');
+            const dlProgress = document.getElementById('dl-progress');
+            const dlPercent = document.getElementById('dl-percent');
+
+            if (dlModal && dlProgress && dlPercent) {
+                dlModal.style.display = 'flex';
+                let progress = 0;
+                
+                const interval = setInterval(() => {
+                    progress += Math.random() * 8; // Velocità di caricamento variabile
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        finishCheckout();
+                    }
+                    dlProgress.style.width = `${progress}%`;
+                    dlPercent.innerText = `${Math.floor(progress)}%`;
+                }, 150);
+            }
+        }
+
+        function finishCheckout() {
+            const dlModal = document.getElementById('dl-modal');
+            const dlProgress = document.getElementById('dl-progress');
+            const dlPercent = document.getElementById('dl-percent');
+
+            setTimeout(() => {
+                if (dlModal) dlModal.style.display = 'none';
+                if (dlProgress) dlProgress.style.width = '0%';
+                if (dlPercent) dlPercent.innerText = '0%';
+                
+                playSynth('success');
+                showCustomToast("Download Started", "Check your browser downloads folder!", "fa-circle-check");
+                
+                // Avvia il download reale del file
+                triggerRealDownload();
+                
+                // Svuota il carrello
+                cart = [];
+                updateCart();
+            }, 800);
+        }
+
+        // Inizializzazione allo stato pronto del DOM
+        window.addEventListener('DOMContentLoaded', () => {
+            updateCart();
+        });
+    </script>
+</body>
+</html>
